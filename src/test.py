@@ -18,13 +18,13 @@ def predict(model, dset, batch_size=512):
     reals, preds = [], []
 
     for step, batch in enumerate(data_loader):
-        reals.append(batch.y.total_rent)
-        preds.append(model(batch.x))
+        reals.append(batch.y.total_rent.cpu().detach())
+        preds.append(model(batch.x).cpu().detach())
 
         if (step + 1) % 10 == 0:
             print(f"Step {step + 1}/{total_steps}")
 
-    return torch.vstack(preds).cpu().detach(), torch.vstack(reals).cpu().detach()
+    return torch.vstack(preds), torch.vstack(reals)
 
 
 if __name__ == "__main__":
