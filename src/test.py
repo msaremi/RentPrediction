@@ -29,8 +29,8 @@ def predict(model, dset, batch_size=512):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dataset", default=Path("data", "immo_data.csv"))
-    parser.add_argument("-model", default=Path("models", "my_model.pt"))
+    parser.add_argument("-dataset", default=Path("..", "data", "immo_data.csv"))
+    parser.add_argument("-model", default=Path("..", "models", "my_model.pt"))
     parser.add_argument("-split-size", nargs=3, default=[0.8, 0.0, 0.2], type=float)
     parser.add_argument("-split-seed", default=0, type=int)
     parser.add_argument("-batch-size", default=768, type=int)
