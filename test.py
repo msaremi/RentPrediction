@@ -7,34 +7,6 @@ from torch.utils.data import DataLoader
 import sklearn.metrics as metrics
 import matplotlib.pyplot as plt
 
-# dataset = RentalDataset(Path("data", "immo_data.csv"))
-# dataset.remove_outliers()
-# dataset.impute()
-#
-# split_generator = torch.Generator().manual_seed(0)
-# split = dataset.split([.8, 0.2], generator=split_generator)
-# train, test = split[0], split[1]
-#
-# model: MyModel = torch.load(Path("models", "my_model.pt"))
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# model.to(device)
-#
-# batch_size = 1
-# data_loader = DataLoader(test, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
-# total_steps = len(data_loader)
-#
-# reals, preds = [], []
-#
-#
-
-# print('MAE', mean_absolute_error(reals, preds))
-# print( 'R2', r2_score(reals, preds))
-# print('RMSE', mean_squared_error(reals, preds) ** 0.5)
-#
-# plt.plot(reals[0:30])
-# plt.plot(preds[0:30])
-# plt.show()
-
 
 def predict(model, dset, batch_size=512):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

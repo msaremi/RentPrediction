@@ -48,8 +48,8 @@ class MyModel(nn.Module):
         return torch.hstack((cos, sin)).float()
 
     def forward(self, x):
-        ids = torch.cat([x.description.ids[:, :64], x.facilities.ids[:, :64]], -1)
-        mask = torch.cat([x.description.mask[:, :64], x.facilities.mask[:, :64]], -1)
+        ids = torch.cat([x.description.ids[:, :128], x.facilities.ids[:, :128]], -1)
+        mask = torch.cat([x.description.mask[:, :128], x.facilities.mask[:, :128]], -1)
         text = self.bert(input_ids=ids, attention_mask=mask).pooler_output
         text = self.linear_bert(text)
         text = self.activation_bert(text)

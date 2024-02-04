@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import torch
-from random_split import random_split
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
 from torch.utils.data.dataset import T_co
 from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer, MinMaxScaler
 from sklearn.impute import KNNImputer, SimpleImputer
@@ -35,6 +34,8 @@ class RentalDataset(Dataset):
     __ourlier_cols = [
         'baseRent', 'totalRent', 'baseRentPerSQMeter', 'totalRentPerSQMeter',
     ]
+
+    __max_length = 256
 
     def __init__(self, file_path=None, data_frame=None):
         if file_path:
@@ -71,8 +72,8 @@ class RentalDataset(Dataset):
         data = pd.DataFrame(geo_dict.to_list(), index=geo_dict.index)
         return data
 
-    @staticmethod
-    def __sanitize_text(raw_data):
+    @classmethod
+    def __sanitize_text(cls, raw_data):
         import re
         from nltk.corpus import stopwords
         german_stopwords = set(stopwords.words('german'))
@@ -98,16 +99,13 @@ class RentalDataset(Dataset):
             row['mask'] = output['attention_mask']
 
         bert_model_name = "bert-base-german-cased"
-        max_length = 128
         from transformers import BertTokenizer
         tokenizer = BertTokenizer.from_pretrained(bert_model_name)
         texts = raw_data.map(clean_text).to_list()
-        tokenized_text = tokenizer(texts, padding='max_length', truncation=True, max_length=max_length)
+        tokenized_text = tokenizer(texts, padding=False, truncation=True, max_length=cls.__max_length)
         data = pd.DataFrame()
         data['input_ids'] = tokenized_text['input_ids']
-        data['input_ids'] = data['input_ids'].map(np.array)
-        data['attention_mask'] = tokenized_text['attention_mask']
-        data['attention_mask'] = data['attention_mask'].map(np.array)
+        data['input_ids'] = data['input_ids'].map(lambda x: np.array(x).astype(np.int32))
         return data
 
     def _sanitize(self, raw_data, geo_data):
@@ -179,8 +177,8 @@ class RentalDataset(Dataset):
         data[('address', 'latitude')] = addr_data['latitude']
         data[('address', 'longitude')] = addr_data['longitude']
 
-        data[[('description', 'ids'), ('description', 'mask')]] = self.__sanitize_text(raw_data['description'])
-        data[[('facilities', 'ids'), ('facilities', 'mask')]] = self.__sanitize_text(raw_data['facilities'])
+        data[('description', '')] = self.__sanitize_text(raw_data['description'])['input_ids']
+        data[('facilities', '')] = self.__sanitize_text(raw_data['facilities'])['input_ids']
 
         data[('baseRent', '')] = raw_data['baseRent']
         data[('totalRent', '')] = raw_data['totalRent']
@@ -200,7 +198,12 @@ class RentalDataset(Dataset):
         self.data = self.data[filtered.all(axis=1)]
 
     def split(self, lengths, **kwargs):
-        subsets = random_split(self, lengths, **kwargs)
+        try:
+            subsets = random_split(self, lengths, **kwargs)
+        except:
+            from random_split import random_split as my_random_split
+            subsets = my_random_split(self, lengths, **kwargs)
+
         return list(map(lambda x: RentalDataset(data_frame=self.data.iloc[x.indices]), subsets))
 
     def impute(self):
@@ -217,6 +220,14 @@ class RentalDataset(Dataset):
         self.data[:] = scalar.fit_transform(self.data.to_numpy())
 
     def __getitem__(self, index) -> T_co:
+        def rpad(arr):
+            return np.pad(arr, (0, type(self).__max_length-len(arr)), 'constant', constant_values=(0, 0))
+
+        def mask(length):
+            arr = np.zeros((type(self).__max_length,), dtype=np.int32)
+            arr[:length] = 1
+            return arr
+
         row = self.data.iloc[index]
         return XY(
             x=X(
@@ -234,12 +245,12 @@ class RentalDataset(Dataset):
                 type_of_flat=row['typeOfFlat'].to_numpy(dtype=np.float),
                 address=row['address'].to_numpy(dtype=np.float),
                 description=TOK(
-                    ids=row['description']['ids'].astype(np.int32),
-                    mask=row['description']['mask'].astype(np.int32),
+                    ids=rpad(row['description', '']),
+                    mask=mask(len(row['description', ''])),
                 ),
                 facilities=TOK(
-                    ids=row['facilities']['ids'].astype(np.int32),
-                    mask=row['facilities']['mask'].astype(np.int32),
+                    ids=rpad(row['facilities', '']),
+                    mask=mask(len(row['facilities', ''])),
                 ),
             ),
             y=Y(

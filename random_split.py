@@ -6,6 +6,7 @@ from torch import default_generator, randperm
 from torch._utils import _accumulate
 from torch.utils.data.dataset import Subset
 
+
 def random_split(dataset, lengths,
                  generator=default_generator):
     r"""
@@ -45,10 +46,6 @@ def random_split(dataset, lengths,
             idx_to_add_at = i % len(subset_lengths)
             subset_lengths[idx_to_add_at] += 1
         lengths = subset_lengths
-        for i, length in enumerate(lengths):
-            if length == 0:
-                warnings.warn(f"Length of split at index {i} is 0. "
-                              f"This might result in an empty dataset.")
 
     # Cannot verify that dataset is Sized
     if sum(lengths) != len(dataset):    # type: ignore[arg-type]
