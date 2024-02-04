@@ -1,1 +1,1 @@
-The directory where the moels are saved by default.
+The directory where the models are saved by default.
