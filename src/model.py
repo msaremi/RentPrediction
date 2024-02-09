@@ -1,20 +1,27 @@
 import torch
 from torch import nn
-from transformers import BertModel, BertConfig
+from transformers import BertModel
 
 
 class MyModel(nn.Module):
     __bert_model_name = "bert-base-german-cased"
 
-    def __init__(self):
+    def __init__(self, use_text):
         super().__init__()
+        self.use_text = use_text
         generator = torch.Generator().manual_seed(120)
         self.gammatrix = nn.Parameter(torch.randn((2, 20), generator=generator) * 2)
         self.gammatrix.requires_grad = False
 
-        self.bert = BertModel.from_pretrained(MyModel.__bert_model_name)
-        self.linear_bert = nn.Linear(self.bert.config.hidden_size, 100)
-        self.activation_bert = nn.LeakyReLU()
+        if use_text:
+            self.bert = BertModel.from_pretrained(MyModel.__bert_model_name)
+            self.linear_bert = nn.Linear(self.bert.config.hidden_size, 100)
+            self.activation_bert = nn.LeakyReLU()
+            text_len = 100
+        else:
+            self.text_tensor = nn.Parameter(torch.Tensor())
+            self.text_tensor.requires_grad = False
+            text_len = 0
 
         self.addr_model = nn.ModuleList([
             nn.Linear(40, 120),
@@ -28,7 +35,7 @@ class MyModel(nn.Module):
         ])
 
         self.feat_model = nn.ModuleList([
-            nn.Linear(86 + 100 + 100, 256),
+            nn.Linear(86 + 100 + text_len, 256),
             nn.LeakyReLU(),
             nn.Dropout(0.1),
             nn.Linear(256, 256),
@@ -38,7 +45,7 @@ class MyModel(nn.Module):
             nn.Linear(256, 100),
             nn.LeakyReLU(),
             nn.Linear(100, 1),
-            nn.ReLU()
+            nn.LeakyReLU()
         ])
 
     def __gamma(self, x):
@@ -48,11 +55,14 @@ class MyModel(nn.Module):
         return torch.hstack((cos, sin)).float()
 
     def forward(self, x):
-        ids = torch.cat([x.description.ids[:, :128], x.facilities.ids[:, :128]], -1)
-        mask = torch.cat([x.description.mask[:, :128], x.facilities.mask[:, :128]], -1)
-        text = self.bert(input_ids=ids, attention_mask=mask).pooler_output
-        text = self.linear_bert(text)
-        text = self.activation_bert(text)
+        if self.use_text:
+            ids = torch.cat([x.description.ids[:, :128], x.facilities.ids[:, :128]], -1)
+            mask = torch.cat([x.description.mask[:, :128], x.facilities.mask[:, :128]], -1)
+            text = self.bert(input_ids=ids, attention_mask=mask).pooler_output
+            text = self.linear_bert(text)
+            text = self.activation_bert(text)
+        else:
+            text = self.text_tensor
 
         addr = self.__gamma(x.address)
 

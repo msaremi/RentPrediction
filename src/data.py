@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset, random_split
 from torch.utils.data.dataset import T_co
-from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer, MinMaxScaler
+from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer, MinMaxScaler, Normalizer
 from sklearn.impute import KNNImputer, SimpleImputer
 from collections import namedtuple
 
@@ -188,11 +188,12 @@ class RentalDataset(Dataset):
         data.columns = pd.MultiIndex.from_tuples(data.columns)
         return data
 
-    def remove_outliers(self, q_bottom=0, q_top=0.95):
+    def remove_outliers(self, q_bottom=0, q_top=0.95, fit_on=None):
+        fit_on = fit_on if fit_on else self
         self.data = self.data[~self.data['baseRent'].isna() & ~self.data['totalRent'].isna()]
         filtered = np.column_stack([
-            (self.data[col] > self.data[col].quantile(q_bottom)) &
-            (self.data[col] < self.data[col].quantile(q_top))
+            (self.data[col] > fit_on.data[col].quantile(q_bottom)) &
+            (self.data[col] < fit_on.data[col].quantile(q_top))
             for col in self.__ourlier_cols
         ])
         self.data = self.data[filtered.all(axis=1)]
@@ -206,18 +207,41 @@ class RentalDataset(Dataset):
 
         return list(map(lambda x: RentalDataset(data_frame=self.data.iloc[x.indices]), subsets))
 
-    def impute(self):
-        self.data['date'] -= self.data['date'].mean()
-        self.data['yearConstructed'] -= self.data['yearConstructed'].mean()
-        self.data['lastRefurbish'] -= self.data['lastRefurbish'].mean()
+    def impute(self, fit_on=None):
+        if len(self.data) == 0:
+            return
+
+        fit_on = fit_on if fit_on else self
+        date_mean = fit_on.data['date'].mean()
+        year_constructed_mean = fit_on.data['yearConstructed'].mean()
+        last_refurbish_mean = fit_on.data['lastRefurbish'].mean()
+        fit_on.data['date'] -= date_mean
+        fit_on.data['yearConstructed'] -= year_constructed_mean
+        fit_on.data['lastRefurbish'] -= last_refurbish_mean
+        self.data['date'] -= date_mean
+        self.data['yearConstructed'] -= year_constructed_mean
+        self.data['lastRefurbish'] -= last_refurbish_mean
+
         imp = SimpleImputer()
         columns = self.data.columns.drop(['description', 'facilities'], level=0)
-        self.data[columns] = imp.fit_transform(self.data[columns].to_numpy())
-        return self.data
+        imp.fit(fit_on.data[columns].to_numpy())
+        self.data[columns] = imp.transform(self.data[columns].to_numpy())
 
-    def standardize(self):
-        scalar = MinMaxScaler()
-        self.data[:] = scalar.fit_transform(self.data.to_numpy())
+    def standardize(self, range=(0.1, 0.9), fit_on=None):
+        fit_on = fit_on if fit_on else self
+        scalar = MinMaxScaler(feature_range=range)
+        columns = self.data.columns.drop(['description', 'facilities'], level=0)
+        scalar.fit(fit_on.data[columns].to_numpy())
+        self.data[columns] = scalar.transform(self.data[columns].to_numpy())
+
+    def normalize(self, quantile=0.96, fit_on=None):
+        from scipy.special import ndtri
+        fit_on = fit_on if fit_on else self
+        normalizer = Normalizer()
+        columns = self.data.columns.drop(['description', 'facilities'], level=0)
+        normalizer.fit(fit_on.data[columns].to_numpy())
+        coef = ndtri(quantile)
+        self.data[columns] = normalizer.transform(self.data[columns].to_numpy()) / coef
 
     def __getitem__(self, index) -> T_co:
         def rpad(arr):

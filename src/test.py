@@ -34,7 +34,7 @@ if __name__ == "__main__":
     dir = ".." if str(Path(__file__).parent.absolute()) == os.getcwd() else "."
     parser.add_argument("-dataset", default=Path(dir, "data", "immo_data.csv"))
     parser.add_argument("-model", default=Path(dir, "models", "my_model.pt"))
-    parser.add_argument("-split-size", nargs=3, default=[0.8, 0.0, 0.2], type=float)
+    parser.add_argument("-split-size", nargs=3, default=[0.85, 0.05, 0.10], type=float)
     parser.add_argument("-split-seed", default=0, type=int)
     parser.add_argument("-batch-size", default=768, type=int)
     args = parser.parse_args()
@@ -42,9 +42,10 @@ if __name__ == "__main__":
     dataset = RentalDataset(args.dataset)
     split_generator = torch.Generator().manual_seed(args.split_seed)
     split = dataset.split(args.split_size, generator=split_generator)
-    test_set = split[2]
-    test_set.remove_outliers()
-    test_set.impute()
+    train_set, test_set = split[0], split[2]
+    test_set.remove_outliers(fit_on=train_set)
+    train_set.remove_outliers()
+    test_set.impute(train_set)
 
     model: MyModel = torch.load(args.model)
     preds, reals = predict(model, test_set, batch_size=args.batch_size)
