@@ -1,27 +1,31 @@
 import torch
 from torch import nn
-from transformers import BertModel
+from pathlib import Path
+from transformers import BertModel, BertConfig
 
 
 class MyModel(nn.Module):
-    __bert_model_name = "bert-base-german-cased"
+    __bert_model_name = "dvm1983/TinyBERT_General_4L_312D_de"
 
-    def __init__(self, use_text):
+    def __init__(self, use_text=False):
         super().__init__()
-        self.use_text = use_text
         generator = torch.Generator().manual_seed(120)
         self.gammatrix = nn.Parameter(torch.randn((2, 20), generator=generator) * 2)
         self.gammatrix.requires_grad = False
+        self.use_text = use_text
 
         if use_text:
-            self.bert = BertModel.from_pretrained(MyModel.__bert_model_name)
-            self.linear_bert = nn.Linear(self.bert.config.hidden_size, 100)
-            self.activation_bert = nn.LeakyReLU()
             text_len = 100
+            self.bert = BertModel.from_pretrained(type(self).__bert_model_name)
+            self.bert_adapter = nn.Sequential(
+                nn.Dropout(p=self.bert.config.hidden_dropout_prob, inplace=False),
+                nn.Linear(self.bert.config.hidden_size, text_len),
+                nn.Tanh()
+            )
         else:
+            text_len = 0
             self.text_tensor = nn.Parameter(torch.Tensor())
             self.text_tensor.requires_grad = False
-            text_len = 0
 
         self.addr_model = nn.ModuleList([
             nn.Linear(40, 120),
@@ -59,8 +63,7 @@ class MyModel(nn.Module):
             ids = torch.cat([x.description.ids[:, :128], x.facilities.ids[:, :128]], -1)
             mask = torch.cat([x.description.mask[:, :128], x.facilities.mask[:, :128]], -1)
             text = self.bert(input_ids=ids, attention_mask=mask).pooler_output
-            text = self.linear_bert(text)
-            text = self.activation_bert(text)
+            text = self.bert_adapter(text)
         else:
             text = self.text_tensor
 
@@ -71,7 +74,7 @@ class MyModel(nn.Module):
 
         out = torch.cat([
             x.miscellaneous, x.firing_types, x.heating_type, x.condition,
-            x.interior_qual, x.type_of_flat, x.is_original_value, addr, text
+            x.interior_qual, x.type_of_flat, x.is_missing, addr, text
         ], -1)
 
         for layer in self.feat_model:

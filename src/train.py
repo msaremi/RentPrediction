@@ -63,8 +63,8 @@ if __name__ == "__main__":
     parser.add_argument("-model", default=Path(dir, "models", "my_model.pt"))
     parser.add_argument("-split-size", nargs=3, default=[0.85, 0.05, 0.10], type=float)
     parser.add_argument("-split-seed", default=0, type=int)
-    parser.add_argument("-batch-size", default=16, type=int)
-    parser.add_argument("-epochs", default=3, type=int)
+    parser.add_argument("-batch-size", default=32, type=int)
+    parser.add_argument("-epochs", default=8, type=int)
     parser.add_argument("-lr", default=1e-3, type=float)
     parser.add_argument('-checkpoint', action='store_true')
     parser.add_argument('-use-text', action='store_true')
@@ -79,6 +79,6 @@ if __name__ == "__main__":
     valid_set.impute(fit_on=train_set)
     train_set.impute()
 
-    model: MyModel = torch.load(args.model) if args.checkpoint else MyModel(use_text=args.use_text)
+    model: MyModel = torch.load(args.model) if args.checkpoint else MyModel(args.use_text)
     train(model, train_set, valid_set, batch_size=args.batch_size, num_epochs=args.epochs, lr=args.lr)
     torch.save(model, args.model)
