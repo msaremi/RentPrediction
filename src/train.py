@@ -63,7 +63,7 @@ if __name__ == "__main__":
     parser.add_argument("-model", default=Path(dir, "models", "my_model.pt"))
     parser.add_argument("-split-size", nargs=3, default=[0.85, 0.05, 0.10], type=float)
     parser.add_argument("-split-seed", default=0, type=int)
-    parser.add_argument("-batch-size", default=512, type=int)
+    parser.add_argument("-batch-size", default=16, type=int)
     parser.add_argument("-epochs", default=3, type=int)
     parser.add_argument("-lr", default=1e-3, type=float)
     parser.add_argument('-checkpoint', action='store_true')

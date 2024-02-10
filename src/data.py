@@ -5,12 +5,13 @@ import torch
 from torch.utils.data import Dataset, random_split
 from torch.utils.data.dataset import T_co
 from sklearn.preprocessing import MultiLabelBinarizer, LabelBinarizer, MinMaxScaler, Normalizer
-from sklearn.impute import KNNImputer, SimpleImputer
+from sklearn.impute import SimpleImputer
 from collections import namedtuple
+from warnings import simplefilter
 
 X = namedtuple('XType', [
     'miscellaneous', 'firing_types', 'heating_type', 'condition',
-    'interior_qual', 'type_of_flat', 'address', 'description', 'facilities'
+    'interior_qual', 'type_of_flat', 'address', 'description', 'facilities', 'is_original_value'
 ])
 
 Y = namedtuple('YType', [
@@ -25,10 +26,9 @@ TOK = namedtuple('TOK', ['ids', 'mask'])
 class RentalDataset(Dataset):
     __nullable_cols = [
         'serviceCharge', 'telekomUploadSpeed', 'telekomHybridUploadSpeed',
-        'yearConstructed', 'yearConstructedRange', 'lastRefurbish', 'floor', 'noFloors',
+        'yearConstructed', 'yearConstructedRange', 'lastRefurbish', 'floor', 'numberOfFloors',
         'noParkSpaces', 'thermalChar', 'heatingCosts', 'electricityBasePrice',
-        'electricityKwhPrice', 'petsAllowed', 'firingTypes', 'heatingType', 'condition',
-        'interiorQual', 'typeOfFlat'
+        'electricityKwhPrice', 'petsAllowed', 'firingTypes', 'heatingType', 'condition', 'interiorQual', 'typeOfFlat'
     ]
 
     __ourlier_cols = [
@@ -45,6 +45,7 @@ class RentalDataset(Dataset):
             if sanitized_path.exists():
                 self.data = pd.read_pickle(sanitized_path)
             else:
+                print("Sanitizing data. This might take several minutes.")
                 geoloc_path = path.parent / "address_geoloc.csv"
                 raw_data = pd.read_csv(path)
                 geo_data = pd.read_csv(geoloc_path, index_col='address')
@@ -121,6 +122,7 @@ class RentalDataset(Dataset):
         def decode_str(row):
             return "" if pd.isna(row) else row
 
+        simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
         data = pd.DataFrame()
 
         data[('serviceCharge', '')] = raw_data['serviceCharge']
@@ -180,13 +182,16 @@ class RentalDataset(Dataset):
         data[('description', '')] = self.__sanitize_text(raw_data['description'])['input_ids']
         data[('facilities', '')] = self.__sanitize_text(raw_data['facilities'])['input_ids']
 
+        for col in type(self).__nullable_cols:
+            data[('isOriginalValue', col)] = ~raw_data[col].isna()
+
         data[('baseRent', '')] = raw_data['baseRent']
         data[('totalRent', '')] = raw_data['totalRent']
         data[('baseRentPerSQMeter', '')] = raw_data['baseRent'] / raw_data['livingSpace']
         data[('totalRentPerSQMeter', '')] = raw_data['totalRent'] / raw_data['livingSpace']
 
         data.columns = pd.MultiIndex.from_tuples(data.columns)
-        return data
+        return data.copy()
 
     def remove_outliers(self, q_bottom=0, q_top=0.95, fit_on=None):
         fit_on = fit_on if fit_on else self
@@ -268,6 +273,7 @@ class RentalDataset(Dataset):
                 interior_qual=row['interiorQual'].to_numpy(dtype=np.float),
                 type_of_flat=row['typeOfFlat'].to_numpy(dtype=np.float),
                 address=row['address'].to_numpy(dtype=np.float),
+                is_original_value=row['isOriginalValue'].to_numpy(dtype=np.float),
                 description=TOK(
                     ids=rpad(row['description', '']),
                     mask=mask(len(row['description', ''])),
@@ -303,6 +309,7 @@ class Collate:
                 interior_qual=torch.stack([torch.from_numpy(item.x.interior_qual) for item in batch]).float().to(self.device),
                 type_of_flat=torch.stack([torch.from_numpy(item.x.type_of_flat) for item in batch]).float().to(self.device),
                 address=torch.stack([torch.from_numpy(item.x.address) for item in batch]).float().to(self.device),
+                is_original_value=torch.stack([torch.from_numpy(item.x.is_original_value) for item in batch]).float().to(self.device),
                 description=TOK(
                     ids=torch.stack([torch.from_numpy(item.x.description.ids) for item in batch]).to(self.device),
                     mask=torch.stack([torch.from_numpy(item.x.description.mask) for item in batch]).to(self.device),

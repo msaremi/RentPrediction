@@ -35,7 +35,7 @@ class MyModel(nn.Module):
         ])
 
         self.feat_model = nn.ModuleList([
-            nn.Linear(86 + 100 + text_len, 256),
+            nn.Linear(105 + 100 + text_len, 256),
             nn.LeakyReLU(),
             nn.Dropout(0.1),
             nn.Linear(256, 256),
@@ -71,7 +71,7 @@ class MyModel(nn.Module):
 
         out = torch.cat([
             x.miscellaneous, x.firing_types, x.heating_type, x.condition,
-            x.interior_qual, x.type_of_flat, addr, text
+            x.interior_qual, x.type_of_flat, x.is_original_value, addr, text
         ], -1)
 
         for layer in self.feat_model:
